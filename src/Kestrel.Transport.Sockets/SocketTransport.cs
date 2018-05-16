@@ -21,6 +21,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets
     internal sealed class SocketTransport : ITransport
     {
         private static readonly PipeScheduler[] ThreadPoolSchedulerArray = new PipeScheduler[] { PipeScheduler.ThreadPool };
+        private static readonly PipeScheduler[] InlineSchedulerArray = new PipeScheduler[] { PipeScheduler.Inline };
+        private static readonly bool IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
         private readonly MemoryPool<byte> _memoryPool;
         private readonly IEndPointInformation _endPointInformation;
@@ -54,7 +56,13 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets
             _trace = trace;
             _memoryPool = memoryPool;
 
-            if (ioQueueCount > 0)
+            // On *nix platforms, Sockets already dispatches to the ThreadPool.
+            if (!IsWindows)
+            {
+                _numSchedulers = InlineSchedulerArray.Length;
+                _schedulers = InlineSchedulerArray;
+            }
+            else if (ioQueueCount > 0)
             {
                 _numSchedulers = ioQueueCount;
                 _schedulers = new IOQueue[_numSchedulers];
